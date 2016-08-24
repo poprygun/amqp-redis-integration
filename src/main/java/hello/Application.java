@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ImportResource;
 
 @SpringBootApplication
-@ImportResource({"classpath*:META-INF/integration.xml"})
+@ImportResource({"classpath*:META-INF/integration-context.xml"})
 public class Application {
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
