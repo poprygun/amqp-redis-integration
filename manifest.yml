@@ -1,0 +1,9 @@
+---
+applications:
+- name: amqp-redis-integration
+  host: pivotal-poc
+  path: target/amqp-redis-integration-0.1.0.jar
+  buildpack: https://github.com/cloudfoundry/java-buildpack.git
+  services:
+  - amqp-service
+  - redis

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:int="http://www.springframework.org/schema/integration"
+       xmlns:feed="http://www.springframework.org/schema/integration/feed"
+       xmlns:int-amqp="http://www.springframework.org/schema/integration/amqp"
+       xmlns:int-stream="http://www.springframework.org/schema/integration/stream"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xmlns:int-redis="http://www.springframework.org/schema/integration/redis"
+       xsi:schemaLocation="http://www.springframework.org/schema/integration/feed
+        http://www.springframework.org/schema/integration/feed/spring-integration-feed.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd http://www.springframework.org/schema/integration/amqp http://www.springframework.org/schema/integration/amqp/spring-integration-amqp.xsd http://www.springframework.org/schema/integration/stream http://www.springframework.org/schema/integration/stream/spring-integration-stream.xsd http://www.springframework.org/schema/rabbit http://www.springframework.org/schema/rabbit/spring-rabbit.xsd http://www.springframework.org/schema/integration/redis http://www.springframework.org/schema/integration/redis/spring-integration-redis.xsd">
+
+    <feed:inbound-channel-adapter id="news" url="https://spring.io/blog.atom">
+        <int:poller fixed-rate="5000"/>
+    </feed:inbound-channel-adapter>
+
+    <int:transformer
+            input-channel="news"
+            expression="payload.title + ' @ ' + payload.link + '#{systemProperties['line.separator']}'"
+            output-channel="toRabbit"/>
+
+    <int:channel id="toRabbit" />
+
+    <int-amqp:outbound-channel-adapter
+            channel="toRabbit" amqp-template="amqpTemplate" exchange-name="si.test.exchange"
+            routing-key="si.test.binding" />
+
+    <!-- From RabbitMQ To STDOUT -->
+
+    <int-amqp:inbound-channel-adapter channel="fromRabbit"
+                                      queue-names="si.test.queue" connection-factory="connectionFactory" />
+
+    <int:channel id="fromRabbit">
+        <int:interceptors>
+            <int:wire-tap channel="loggingChannel" />
+        </int:interceptors>
+    </int:channel>
+
+    <int:transformer input-channel="fromRabbit" output-channel="consoleOut" expression="'Received: ' + payload" />
+
+    <int-stream:stdout-channel-adapter id="consoleOut"
+                                       append-newline="true" />
+
+    <int:logging-channel-adapter id="loggingChannel" log-full-message="true" logger-name="tapInbound"
+                                 level="INFO" />
+
+    <!-- Redis -->
+    <int-redis:store-outbound-channel-adapter id="redisListAdapter"
+                                              collection-type="LIST"
+                                              channel="fromRabbit"
+                                              key="myCollection" />
+
+    <!-- Infrastructure -->
+
+    <bean id="redisConnectionFactory"
+          class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory">
+    </bean>
+
+    <rabbit:connection-factory id="connectionFactory" host="localhost" />
+
+    <rabbit:template id="amqpTemplate" connection-factory="connectionFactory" />
+
+    <rabbit:admin connection-factory="connectionFactory" />
+
+    <rabbit:queue name="si.test.queue" />
+
+    <rabbit:direct-exchange name="si.test.exchange">
+        <rabbit:bindings>
+            <rabbit:binding queue="si.test.queue" key="si.test.binding" />
+        </rabbit:bindings>
+    </rabbit:direct-exchange>
+</beans>
